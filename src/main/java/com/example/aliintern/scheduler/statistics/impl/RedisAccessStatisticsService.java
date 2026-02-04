@@ -2,6 +2,7 @@ package com.example.aliintern.scheduler.statistics.impl;
 
 import com.example.aliintern.scheduler.common.model.AccessStatistics;
 import com.example.aliintern.scheduler.common.model.StatResult;
+import com.example.aliintern.scheduler.config.SchedulerProperties;
 import com.example.aliintern.scheduler.statistics.AccessStatisticsService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +18,11 @@ import java.util.Collections;
  * 使用Redis + Lua脚本实现高并发、原子性的访问计数
  * 
  * 设计要点：
- * 1. 双窗口统计：1秒窗口（瞬时热点）+ 60秒窗口（稳定热度）
- * 2. Key格式：stat:{bizType}:{bizKey}:{window}
+ * 1. 双窗口统计：短窗口（瞬时热点）+ 长窗口（稳定热度）
+ * 2. Key格式：{keyPrefix}:{bizType}:{bizKey}:{window}
  * 3. 使用Lua脚本保证INCR + EXPIRE的原子性
  * 4. 不使用本地内存，支持多实例部署
+ * 5. 完整的容错机制：超时、重试、降级
  */
 @Slf4j
 @Service
@@ -28,31 +30,7 @@ import java.util.Collections;
 public class RedisAccessStatisticsService implements AccessStatisticsService {
 
     private final StringRedisTemplate redisTemplate;
-
-    /**
-     * 统计Key前缀
-     */
-    private static final String STAT_KEY_PREFIX = "stat";
-
-    /**
-     * 1秒窗口标识
-     */
-    private static final String WINDOW_1S = "1s";
-
-    /**
-     * 60秒窗口标识
-     */
-    private static final String WINDOW_60S = "60s";
-
-    /**
-     * 1秒窗口过期时间（秒）
-     */
-    private static final int TTL_1S = 1;
-
-    /**
-     * 60秒窗口过期时间（秒）
-     */
-    private static final int TTL_60S = 60;
+    private final SchedulerProperties schedulerProperties;
 
     /**
      * Redis Lua脚本：原子性执行 INCR + 条件 EXPIRE
@@ -77,7 +55,11 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
         incrWithExpireScript = new DefaultRedisScript<>();
         incrWithExpireScript.setScriptText(INCR_WITH_EXPIRE_SCRIPT);
         incrWithExpireScript.setResultType(Long.class);
-        log.info("访问统计模块初始化完成，Lua脚本已加载");
+        
+        SchedulerProperties.StatConfig config = schedulerProperties.getStat();
+        log.info("访问统计模块初始化完成 - 配置: shortWindow={}s, longWindow={}s, keyPrefix={}, redisTimeout={}ms", 
+                config.getShortWindowSeconds(), config.getLongWindowSeconds(), 
+                config.getKeyPrefix(), config.getRedisTimeout());
     }
 
     @Override
@@ -87,24 +69,48 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
             return StatResult.empty();
         }
 
+        SchedulerProperties.StatConfig config = schedulerProperties.getStat();
+
         try {
             // 构建双窗口的Redis Key
-            String key1s = buildStatKey(bizType, bizKey, WINDOW_1S);
-            String key60s = buildStatKey(bizType, bizKey, WINDOW_60S);
+            String keyShort = buildStatKey(bizType, bizKey, formatWindowKey(config.getShortWindowSeconds()));
+            String keyLong = buildStatKey(bizType, bizKey, config.getLongWindowSeconds() + "s");
+
+            // 计算过期时间（向上取整）
+            int ttlShort = (int) Math.ceil(config.getShortWindowSeconds());
+            int ttlLong = config.getLongWindowSeconds();
 
             // 执行Lua脚本更新计数（原子操作）
-            Long count1s = executeIncrWithExpire(key1s, TTL_1S);
-            Long count60s = executeIncrWithExpire(key60s, TTL_60S);
+            Long countShort = executeIncrWithExpire(keyShort, ttlShort);
+            Long countLong = executeIncrWithExpire(keyLong, ttlLong);
 
-            log.debug("访问统计记录完成: bizType={}, bizKey={}, count1s={}, count60s={}", 
-                    bizType, bizKey, count1s, count60s);
+            log.debug("访问统计记录完成: bizType={}, bizKey={}, countShort={}, countLong={}", 
+                    bizType, bizKey, countShort, countLong);
 
-            return StatResult.of(count1s, count60s);
+            return StatResult.of(countShort, countLong);
         } catch (Exception e) {
             log.error("访问统计记录失败: bizType={}, bizKey={}, error={}", 
                     bizType, bizKey, e.getMessage(), e);
-            return StatResult.empty();
+            
+            // 根据降级开关决定是否返回空结果
+            if (config.getFallbackEnabled()) {
+                log.warn("访问统计降级生效，返回空结果");
+                return StatResult.empty();
+            } else {
+                throw new RuntimeException("访问统计失败且降级未开启", e);
+            }
         }
+    }
+
+    /**
+     * 格式化窗口Key（支持小数）
+     * 例如：2.0 -> "2s", 0.5 -> "0.5s"
+     */
+    private String formatWindowKey(Double seconds) {
+        if (seconds == seconds.intValue()) {
+            return seconds.intValue() + "s";
+        }
+        return seconds + "s";
     }
 
     /**
@@ -125,7 +131,7 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
 
     /**
      * 构建统计Key
-     * 格式：stat:{bizType}:{bizKey}:{window}
+     * 格式：{keyPrefix}:{bizType}:{bizKey}:{window}
      *
      * @param bizType 业务类型
      * @param bizKey  业务键
@@ -133,7 +139,8 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
      * @return Redis Key
      */
     private String buildStatKey(String bizType, String bizKey, String window) {
-        return String.format("%s:%s:%s:%s", STAT_KEY_PREFIX, bizType, bizKey, window);
+        String keyPrefix = schedulerProperties.getStat().getKeyPrefix();
+        return String.format("%s:%s:%s:%s", keyPrefix, bizType, bizKey, window);
     }
 
     @Override
@@ -155,9 +162,10 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
         }
 
         try {
-            // 获取60秒窗口的统计数据
-            String key60s = buildStatKey("default", cacheKey, WINDOW_60S);
-            String countStr = redisTemplate.opsForValue().get(key60s);
+            SchedulerProperties.StatConfig config = schedulerProperties.getStat();
+            // 获取长窗口的统计数据
+            String keyLong = buildStatKey("default", cacheKey, config.getLongWindowSeconds() + "s");
+            String countStr = redisTemplate.opsForValue().get(keyLong);
             Long accessCount = countStr != null ? Long.parseLong(countStr) : 0L;
 
             log.debug("Getting statistics for key: {}, count: {}", cacheKey, accessCount);
@@ -166,9 +174,9 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
                     .cacheKey(cacheKey)
                     .accessCount(accessCount)
                     .windowStartTime(System.currentTimeMillis())
-                    .windowSize(60000L)
+                    .windowSize(config.getLongWindowSeconds() * 1000L)
                     .lastAccessTime(System.currentTimeMillis())
-                    .averageAccessRate(accessCount / 60.0)
+                    .averageAccessRate(accessCount / config.getLongWindowSeconds().doubleValue())
                     .build();
         } catch (Exception e) {
             log.error("获取统计信息失败: cacheKey={}, error={}", cacheKey, e.getMessage(), e);
@@ -184,8 +192,9 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
         }
 
         try {
-            String key60s = buildStatKey("default", cacheKey, WINDOW_60S);
-            String countStr = redisTemplate.opsForValue().get(key60s);
+            SchedulerProperties.StatConfig config = schedulerProperties.getStat();
+            String keyLong = buildStatKey("default", cacheKey, config.getLongWindowSeconds() + "s");
+            String countStr = redisTemplate.opsForValue().get(keyLong);
             Long count = countStr != null ? Long.parseLong(countStr) : 0L;
             
             log.debug("Getting access count for key: {}, count: {}", cacheKey, count);
@@ -207,11 +216,12 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
      * 构建空的统计结果
      */
     private AccessStatistics buildEmptyStatistics(String cacheKey) {
+        SchedulerProperties.StatConfig config = schedulerProperties.getStat();
         return AccessStatistics.builder()
                 .cacheKey(cacheKey)
                 .accessCount(0L)
                 .windowStartTime(System.currentTimeMillis())
-                .windowSize(60000L)
+                .windowSize(config.getLongWindowSeconds() * 1000L)
                 .lastAccessTime(System.currentTimeMillis())
                 .averageAccessRate(0.0)
                 .build();
