@@ -1,6 +1,5 @@
 package com.example.aliintern.scheduler.statistics.impl;
 
-import com.example.aliintern.scheduler.common.model.AccessStatistics;
 import com.example.aliintern.scheduler.common.model.StatResult;
 import com.example.aliintern.scheduler.config.SchedulerProperties;
 import com.example.aliintern.scheduler.statistics.AccessStatisticsService;
@@ -132,98 +131,10 @@ public class RedisAccessStatisticsService implements AccessStatisticsService {
     /**
      * 构建统计Key
      * 格式：{keyPrefix}:{bizType}:{bizKey}:{window}
-     *
-     * @param bizType 业务类型
-     * @param bizKey  业务键
-     * @param window  时间窗口标识
-     * @return Redis Key
+     * 示例：stat:product:12345:2s
      */
     private String buildStatKey(String bizType, String bizKey, String window) {
         String keyPrefix = schedulerProperties.getStat().getKeyPrefix();
         return String.format("%s:%s:%s:%s", keyPrefix, bizType, bizKey, window);
-    }
-
-    @Override
-    public void recordAccess(String cacheKey) {
-        // 兼容旧接口：使用默认业务类型
-        if (cacheKey == null || cacheKey.isEmpty()) {
-            log.warn("无效的缓存键: {}", cacheKey);
-            return;
-        }
-        record("default", cacheKey);
-        log.debug("Recording access for key: {}", cacheKey);
-    }
-
-    @Override
-    public AccessStatistics getStatistics(String cacheKey) {
-        if (cacheKey == null || cacheKey.isEmpty()) {
-            log.warn("无效的缓存键: {}", cacheKey);
-            return buildEmptyStatistics(cacheKey);
-        }
-
-        try {
-            SchedulerProperties.StatConfig config = schedulerProperties.getStat();
-            // 获取长窗口的统计数据
-            String keyLong = buildStatKey("default", cacheKey, config.getLongWindowSeconds() + "s");
-            String countStr = redisTemplate.opsForValue().get(keyLong);
-            Long accessCount = countStr != null ? Long.parseLong(countStr) : 0L;
-
-            log.debug("Getting statistics for key: {}, count: {}", cacheKey, accessCount);
-            
-            return AccessStatistics.builder()
-                    .cacheKey(cacheKey)
-                    .accessCount(accessCount)
-                    .windowStartTime(System.currentTimeMillis())
-                    .windowSize(config.getLongWindowSeconds() * 1000L)
-                    .lastAccessTime(System.currentTimeMillis())
-                    .averageAccessRate(accessCount / config.getLongWindowSeconds().doubleValue())
-                    .build();
-        } catch (Exception e) {
-            log.error("获取统计信息失败: cacheKey={}, error={}", cacheKey, e.getMessage(), e);
-            return buildEmptyStatistics(cacheKey);
-        }
-    }
-
-    @Override
-    public Long getAccessCount(String cacheKey) {
-        if (cacheKey == null || cacheKey.isEmpty()) {
-            log.warn("无效的缓存键: {}", cacheKey);
-            return 0L;
-        }
-
-        try {
-            SchedulerProperties.StatConfig config = schedulerProperties.getStat();
-            String keyLong = buildStatKey("default", cacheKey, config.getLongWindowSeconds() + "s");
-            String countStr = redisTemplate.opsForValue().get(keyLong);
-            Long count = countStr != null ? Long.parseLong(countStr) : 0L;
-            
-            log.debug("Getting access count for key: {}, count: {}", cacheKey, count);
-            return count;
-        } catch (Exception e) {
-            log.error("获取访问次数失败: cacheKey={}, error={}", cacheKey, e.getMessage(), e);
-            return 0L;
-        }
-    }
-
-    @Override
-    public void cleanExpiredData() {
-        // Redis的Key自动过期机制已处理数据清理
-        // 此方法保留用于未来可能的主动清理需求
-        log.debug("Cleaning expired statistics data - handled by Redis TTL mechanism");
-    }
-
-    /**
-     * 构建空的统计结果
-     */
-    private AccessStatistics buildEmptyStatistics(String cacheKey) {
-        SchedulerProperties.StatConfig config = schedulerProperties.getStat();
-        return AccessStatistics.builder()
-                .cacheKey(cacheKey)
-                .accessCount(0L)
-                .windowStartTime(System.currentTimeMillis())
-                .windowSize(config.getLongWindowSeconds() * 1000L)
-                .lastAccessTime(System.currentTimeMillis())
-                .averageAccessRate(0.0)
-                .build();
     }
 }

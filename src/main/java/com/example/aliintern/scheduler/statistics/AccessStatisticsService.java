@@ -1,6 +1,5 @@
 package com.example.aliintern.scheduler.statistics;
 
-import com.example.aliintern.scheduler.common.model.AccessStatistics;
 import com.example.aliintern.scheduler.common.model.StatResult;
 
 /**
@@ -25,43 +24,15 @@ public interface AccessStatisticsService {
      * 记录一次访问并返回双窗口统计结果
      * 
      * 使用Redis Lua脚本保证原子性：
-     * 1. 对1秒窗口key执行INCR + 条件EXPIRE
-     * 2. 对60秒窗口key执行INCR + 条件EXPIRE
+     * 1. 对短窗口key执行INCR + 条件EXPIRE
+     * 2. 对长窗口key执行INCR + 条件EXPIRE
      * 
-     * Key格式：stat:{bizType}:{bizKey}:{window}
-     * 示例：stat:product:12345:1s, stat:product:12345:60s
+     * Key格式：{keyPrefix}:{bizType}:{bizKey}:{window}
+     * 示例：stat:product:12345:2s, stat:product:12345:120s
      *
      * @param bizType 业务类型（如：product, order, user）
      * @param bizKey  业务键（如：商品ID、订单ID）
-     * @return StatResult 包含count1s和count60s的统计结果
+     * @return StatResult 包含 countShort 和 countLong 的统计结果
      */
     StatResult record(String bizType, String bizKey);
-
-    /**
-     * 记录一次访问（兼容旧接口）
-     *
-     * @param cacheKey 缓存键
-     */
-    void recordAccess(String cacheKey);
-
-    /**
-     * 获取访问统计信息
-     *
-     * @param cacheKey 缓存键
-     * @return 访问统计数据
-     */
-    AccessStatistics getStatistics(String cacheKey);
-
-    /**
-     * 获取当前时间窗口内的访问次数
-     *
-     * @param cacheKey 缓存键
-     * @return 访问次数
-     */
-    Long getAccessCount(String cacheKey);
-
-    /**
-     * 清除过期的统计数据
-     */
-    void cleanExpiredData();
 }

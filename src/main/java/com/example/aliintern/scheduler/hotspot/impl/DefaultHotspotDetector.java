@@ -4,7 +4,6 @@ import com.example.aliintern.scheduler.common.enums.HotspotLevel;
 import com.example.aliintern.scheduler.common.model.StatResult;
 import com.example.aliintern.scheduler.config.SchedulerProperties;
 import com.example.aliintern.scheduler.hotspot.HotspotDetector;
-import com.example.aliintern.scheduler.statistics.AccessStatisticsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,8 +12,8 @@ import org.springframework.stereotype.Service;
  * 热点识别模块实现（基于双窗口阈值判断）
  * 
  * 识别策略：
- * 1. 瞬时热度（1秒窗口）用于识别突发热点
- * 2. 稳定热度（60秒窗口）用于识别长期热点
+ * 1. 瞬时热度（短窗口）用于识别突发热点
+ * 2. 稳定热度（长窗口）用于识别长期热点
  * 3. 当多个条件命中时，取最高热度等级
  * 
  * 模块边界：
@@ -28,16 +27,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultHotspotDetector implements HotspotDetector {
 
-    private final AccessStatisticsService accessStatisticsService;
     private final SchedulerProperties schedulerProperties;
 
     /**
      * 核心方法：根据访问统计结果识别热点等级
      * 
      * 判断顺序（从高到低）：
-     * 1. EXTREMELY_HOT: count1s >= 100 OR count60s >= 1000
-     * 2. HOT: count1s >= 20 OR count60s >= 300
-     * 3. WARM: count1s >= 5 OR count60s >= 60
+     * 1. EXTREMELY_HOT: countShort >= 100 OR countLong >= 1000
+     * 2. HOT: countShort >= 20 OR countLong >= 300
+     * 3. WARM: countShort >= 5 OR countLong >= 60
      * 4. COLD: 其他情况
      */
     @Override
@@ -50,7 +48,7 @@ public class DefaultHotspotDetector implements HotspotDetector {
         long count1s = stat.getCount1s() != null ? stat.getCount1s() : 0L;
         long count60s = stat.getCount60s() != null ? stat.getCount60s() : 0L;
 
-        log.debug("热点检测输入: count1s={}, count60s={}", count1s, count60s);
+        log.debug("热点检测输入: countShort={}, countLong={}", count1s, count60s);
 
         // 按优先级从高到低判断
         HotspotLevel level = doDetect(count1s, count60s);
@@ -85,27 +83,6 @@ public class DefaultHotspotDetector implements HotspotDetector {
 
         // COLD: 冷数据
         return HotspotLevel.COLD;
-    }
-
-    @Override
-    public HotspotLevel detectHotspotLevel(String cacheKey) {
-        // 兼容旧接口：通过 AccessStatisticsService 获取统计数据
-        if (cacheKey == null || cacheKey.isEmpty()) {
-            log.warn("cacheKey 为空，返回 COLD");
-            return HotspotLevel.COLD;
-        }
-
-        // 使用 record 方法获取双窗口统计（会同时更新计数）
-        StatResult stat = accessStatisticsService.record("default", cacheKey);
-        log.debug("Detecting hotspot level for key: {}, stat: {}", cacheKey, stat);
-
-        return detect(stat);
-    }
-
-    @Override
-    public boolean isHotspot(String cacheKey) {
-        HotspotLevel level = detectHotspotLevel(cacheKey);
-        return level == HotspotLevel.HOT || level == HotspotLevel.EXTREMELY_HOT;
     }
 
     @Override

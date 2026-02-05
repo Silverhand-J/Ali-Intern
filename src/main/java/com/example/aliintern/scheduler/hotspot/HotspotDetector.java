@@ -23,36 +23,20 @@ public interface HotspotDetector {
      * 核心方法：根据访问统计结果识别热点等级
      * 
      * 采用"双窗口阈值判断"策略：
-     * - 瞬时热度（1秒窗口）用于识别突发热点
-     * - 稳定热度（60秒窗口）用于识别长期热点
+     * - 瞬时热度（短窗口）用于识别突发热点
+     * - 稳定热度（长窗口）用于识别长期热点
      * - 当多个条件命中时，取最高热度等级
      *
-     * @param stat 访问统计结果（包含 count1s 和 count60s）
+     * @param stat 访问统计结果（包含 countShort 和 countLong）
      * @return 热点等级（COLD / WARM / HOT / EXTREMELY_HOT）
      */
     HotspotLevel detect(StatResult stat);
 
     /**
-     * 识别热点等级（兼容旧接口）
-     *
-     * @param cacheKey 缓存键
-     * @return 热点等级
-     */
-    HotspotLevel detectHotspotLevel(String cacheKey);
-
-    /**
-     * 判断是否为热点数据
-     *
-     * @param cacheKey 缓存键
-     * @return true-热点数据, false-非热点数据
-     */
-    boolean isHotspot(String cacheKey);
-
-    /**
      * 获取热点阈值配置
      *
      * @param level 热点等级
-     * @return 该等级对应的访问次数阈值
+     * @return 该等级对应的访问次数阈值（长窗口）
      */
     Long getThreshold(HotspotLevel level);
 }

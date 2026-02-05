@@ -4,13 +4,9 @@ import com.example.aliintern.scheduler.common.enums.HotspotLevel;
 import com.example.aliintern.scheduler.common.model.StatResult;
 import com.example.aliintern.scheduler.config.SchedulerProperties;
 import com.example.aliintern.scheduler.hotspot.impl.DefaultHotspotDetector;
-import com.example.aliintern.scheduler.statistics.AccessStatisticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,11 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 
  * 测试双窗口阈值判断逻辑的正确性
  */
-@ExtendWith(MockitoExtension.class)
 class DefaultHotspotDetectorTest {
-
-    @Mock
-    private AccessStatisticsService accessStatisticsService;
 
     private SchedulerProperties schedulerProperties;
     private DefaultHotspotDetector detector;
@@ -37,7 +29,7 @@ class DefaultHotspotDetectorTest {
         // HOT: short >= 20 OR long >= 300
         // WARM: short >= 5 OR long >= 60
         
-        detector = new DefaultHotspotDetector(accessStatisticsService, schedulerProperties);
+        detector = new DefaultHotspotDetector(schedulerProperties);
     }
 
     // ==================== COLD 级别测试 ====================

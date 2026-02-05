@@ -6,28 +6,36 @@ import com.example.aliintern.scheduler.common.enums.RequestType;
 import com.example.aliintern.scheduler.common.model.PolicyDecision;
 import com.example.aliintern.scheduler.common.model.RequestContext;
 import com.example.aliintern.scheduler.decision.PolicyDecisionEngine;
-import com.example.aliintern.scheduler.hotspot.HotspotDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * 策略决策引擎默认实现
+ * 
+ * 职责：
+ * - 基于热点等级决定缓存策略
+ * - 计算推荐的TTL时长
+ * - 判断是否需要限流/降级
+ * 
+ * 注意：热点等级由 SchedulerFacade 统一计算并设置到 RequestContext 中
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DefaultPolicyDecisionEngine implements PolicyDecisionEngine {
 
-    private final HotspotDetector hotspotDetector;
-
     @Override
     public PolicyDecision makeDecision(RequestContext context) {
         log.debug("Making decision for request: {}", context.getRequestId());
 
-        // 获取热点等级
-        HotspotLevel hotspotLevel = hotspotDetector.detectHotspotLevel(context.getCacheKey());
-        context.setHotspotLevel(hotspotLevel);
+        // 从上下文获取热点等级（已由SchedulerFacade设置）
+        HotspotLevel hotspotLevel = context.getHotspotLevel();
+        if (hotspotLevel == null) {
+            log.warn("HotspotLevel 为空，默认设置为 COLD");
+            hotspotLevel = HotspotLevel.COLD;
+            context.setHotspotLevel(hotspotLevel);
+        }
 
         // 根据请求类型和热点等级决定缓存策略
         CacheStrategy strategy = determineCacheStrategy(context.getRequestType(), hotspotLevel);
@@ -47,7 +55,8 @@ public class DefaultPolicyDecisionEngine implements PolicyDecisionEngine {
     public Long calculateRecommendedTtl(RequestContext context) {
         HotspotLevel level = context.getHotspotLevel();
         if (level == null) {
-            level = hotspotDetector.detectHotspotLevel(context.getCacheKey());
+            log.warn("HotspotLevel 为空，默认返回 0L");
+            return 0L;
         }
 
         return switch (level) {
