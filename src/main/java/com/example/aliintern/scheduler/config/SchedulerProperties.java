@@ -30,6 +30,11 @@ public class SchedulerProperties {
      */
     private final HotspotConfig hotspot = new HotspotConfig();
 
+    /**
+     * 策略决策引擎配置
+     */
+    private final StrategyConfig strategy = new StrategyConfig();
+
     // ==================== 访问统计模块配置 ====================
     
     /**
@@ -135,5 +140,71 @@ public class SchedulerProperties {
          * 当 countLong >= 此值时判定为 WARM
          */
         private Long warmLongThreshold = 60L;
+    }
+
+    // ==================== 策略决策引擎配置 ====================
+    
+    /**
+     * 策略决策引擎配置
+     * 配置前缀：scheduler.strategy
+     */
+    @Data
+    public static class StrategyConfig {
+        
+        // ========== COLD 级别策略 ==========
+        
+        /**
+         * COLD 级别 - 缓存模式
+         * 默认 NONE（不缓存）
+         */
+        private String coldCacheMode = "NONE";
+        
+        /**
+         * COLD 级别 - TTL 等级
+         * 默认 SHORT
+         */
+        private String coldTtlLevel = "SHORT";
+        
+        // ========== WARM 级别策略 ==========
+        
+        /**
+         * WARM 级别 - 缓存模式
+         * 默认 REMOTE_ONLY（仅 Redis）
+         */
+        private String warmCacheMode = "REMOTE_ONLY";
+        
+        /**
+         * WARM 级别 - TTL 等级
+         * 默认 SHORT
+         */
+        private String warmTtlLevel = "SHORT";
+        
+        // ========== HOT 级别策略 ==========
+        
+        /**
+         * HOT 级别 - 缓存模式
+         * 默认 LOCAL_AND_REMOTE（本地 + Redis）
+         */
+        private String hotCacheMode = "LOCAL_AND_REMOTE";
+        
+        /**
+         * HOT 级别 - TTL 等级
+         * 默认 NORMAL
+         */
+        private String hotTtlLevel = "NORMAL";
+        
+        // ========== EXTREMELY_HOT 级别策略 ==========
+        
+        /**
+         * EXTREMELY_HOT 级别 - 缓存模式
+         * 默认 LOCAL_AND_REMOTE（本地 + Redis）
+         */
+        private String extremelyHotCacheMode = "LOCAL_AND_REMOTE";
+        
+        /**
+         * EXTREMELY_HOT 级别 - TTL 等级
+         * 默认 LONG
+         */
+        private String extremelyHotTtlLevel = "LONG";
     }
 }
