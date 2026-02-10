@@ -1,12 +1,12 @@
 package com.example.aliintern.scheduler;
 
 import com.example.aliintern.scheduler.common.enums.HotspotLevel;
-import com.example.aliintern.scheduler.common.model.PolicyDecision;
+import com.example.aliintern.scheduler.common.model.DispatchDecision;
 import com.example.aliintern.scheduler.common.model.RequestContext;
 import com.example.aliintern.scheduler.common.model.StatResult;
-import com.example.aliintern.scheduler.decision.PolicyDecisionEngine;
 import com.example.aliintern.scheduler.hotspot.HotspotDetector;
 import com.example.aliintern.scheduler.statistics.AccessStatisticsService;
+import com.example.aliintern.scheduler.strategy.DecisionStrategyEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ public class SchedulerFacade {
 
     private final AccessStatisticsService accessStatisticsService;
     private final HotspotDetector hotspotDetector;
-    private final PolicyDecisionEngine policyDecisionEngine;
+    private final DecisionStrategyEngine decisionStrategyEngine;
 
     /**
      * 处理请求
@@ -36,7 +36,7 @@ public class SchedulerFacade {
      * @param context 请求上下文
      * @return 策略决策结果
      */
-    public PolicyDecision process(RequestContext context) {
+    public DispatchDecision process(RequestContext context) {
         log.info("Processing request: {}", context.getRequestId());
 
         // 1. 访问统计：记录访问频次，获取双窗口统计结果
@@ -53,9 +53,9 @@ public class SchedulerFacade {
         log.debug("Hotspot level detected: {}", hotspotLevel);
 
         // 3. 策略决策：基于热度等级生成缓存策略
-        PolicyDecision decision = policyDecisionEngine.makeDecision(context);
-        log.info("Request {} processed, strategy: {}, TTL: {}s",
-                context.getRequestId(), decision.getCacheStrategy(), decision.getCacheTtl());
+        DispatchDecision decision = decisionStrategyEngine.decide(hotspotLevel);
+        log.info("Request {} processed, cacheMode: {}, ttlLevel: {}",
+                context.getRequestId(), decision.getCacheMode(), decision.getTtlLevel());
 
         return decision;
     }
