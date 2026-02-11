@@ -35,6 +35,11 @@ public class SchedulerProperties {
      */
     private final StrategyConfig strategy = new StrategyConfig();
 
+    /**
+     * 缓存访问代理配置（TTL 映射）
+     */
+    private final CacheConfig cache = new CacheConfig();
+
     // ==================== 访问统计模块配置 ====================
     
     /**
@@ -206,5 +211,55 @@ public class SchedulerProperties {
          * 默认 LONG
          */
         private String extremelyHotTtlLevel = "LONG";
+    }
+
+    // ==================== 缓存访问代理配置 ====================
+    
+    /**
+     * 缓存访问代理配置
+     * 配置前缀：scheduler.cache
+     */
+    @Data
+    public static class CacheConfig {
+        
+        /**
+         * TTL 配置
+         */
+        private final TtlConfig ttl = new TtlConfig();
+        
+        /**
+         * TTL 配置类
+         */
+        @Data
+        public static class TtlConfig {
+            
+            /**
+             * 本地缓存 TTL 配置（秒）
+             */
+            private TtlLevelConfig local = new TtlLevelConfig(30, 60, 300);
+            
+            /**
+             * Redis TTL 配置（秒）
+             */
+            private TtlLevelConfig remote = new TtlLevelConfig(60, 120, 600);
+            
+            /**
+             * TTL 级别配置
+             */
+            @Data
+            public static class TtlLevelConfig {
+                private long shortTtl;   // SHORT 级别 TTL
+                private long normalTtl;  // NORMAL 级别 TTL
+                private long longTtl;    // LONG 级别 TTL
+                
+                public TtlLevelConfig() {}
+                
+                public TtlLevelConfig(long shortTtl, long normalTtl, long longTtl) {
+                    this.shortTtl = shortTtl;
+                    this.normalTtl = normalTtl;
+                    this.longTtl = longTtl;
+                }
+            }
+        }
     }
 }
