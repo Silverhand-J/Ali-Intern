@@ -1,8 +1,6 @@
 package com.example.aliintern.scheduler.common.model;
 
-import com.example.aliintern.scheduler.common.enums.CacheStrategy;
 import com.example.aliintern.scheduler.common.enums.HotspotLevel;
-import com.example.aliintern.scheduler.common.enums.RequestType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -25,19 +23,9 @@ public class RequestContext {
     private String cacheKey;
 
     /**
-     * 请求类型
-     */
-    private RequestType requestType;
-
-    /**
      * 热点等级
      */
     private HotspotLevel hotspotLevel;
-
-    /**
-     * 缓存策略
-     */
-    private CacheStrategy cacheStrategy;
 
     /**
      * 缓存TTL（秒）

@@ -1,7 +1,6 @@
 package com.example.aliintern.scheduler.controller;
 
 import com.example.aliintern.scheduler.SchedulerFacade;
-import com.example.aliintern.scheduler.common.enums.RequestType;
 import com.example.aliintern.scheduler.common.model.RequestContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +51,6 @@ public class EndToEndTestController {
         // 构建请求上下文
         RequestContext context = RequestContext.builder()
                 .requestId(UUID.randomUUID().toString())
-                .requestType(RequestType.valueOf(bizType.toUpperCase()))
                 .cacheKey(bizKey)
                 .build();
         
@@ -115,7 +113,6 @@ public class EndToEndTestController {
         for (int targetCount : accessCounts) {
             RequestContext context = RequestContext.builder()
                     .requestId(UUID.randomUUID().toString())
-                    .requestType(RequestType.valueOf(bizType.toUpperCase()))
                     .cacheKey(bizKey)
                     .build();
             
@@ -169,7 +166,6 @@ public class EndToEndTestController {
         
         RequestContext context = RequestContext.builder()
                 .requestId(UUID.randomUUID().toString())
-                .requestType(RequestType.valueOf(bizType.toUpperCase()))
                 .cacheKey(bizKey)
                 .build();
         
@@ -236,7 +232,6 @@ public class EndToEndTestController {
                 for (int i = 0; i < iterations; i++) {
                     RequestContext context = RequestContext.builder()
                             .requestId(UUID.randomUUID().toString())
-                            .requestType(RequestType.valueOf(bizType.toUpperCase()))
                             .cacheKey(bizKey)
                             .build();
                     
@@ -324,7 +319,6 @@ public class EndToEndTestController {
     private RequestContext buildContext(String bizType, String bizKey) {
         return RequestContext.builder()
                 .requestId(UUID.randomUUID().toString())
-                .requestType(RequestType.valueOf(bizType.toUpperCase()))
                 .cacheKey(bizKey)
                 .build();
     }

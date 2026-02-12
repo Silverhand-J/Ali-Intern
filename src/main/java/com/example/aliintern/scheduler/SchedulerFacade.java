@@ -48,7 +48,7 @@ public class SchedulerFacade {
 
         // 1. 访问统计：记录访问频次，获取双窗口统计结果
         StatResult stat = accessStatisticsService.record(
-                context.getRequestType().name(), 
+                "default", 
                 context.getCacheKey()
         );
         log.debug("Access recorded for key: {}, countShort={}, countLong={}", 
